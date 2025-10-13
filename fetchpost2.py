@@ -23,11 +23,11 @@ API_SECRET = os.environ.get('API_SECRET')
 ACCESS_TOKEN = os.environ.get('ACCESS_TOKEN')
 ACCESS_SECRET = os.environ.get('ACCESS_SECRET')
 
-auth = tweepy.OAuthHandler(API_KEY, API_SECRET)
-auth.set_access_token(ACCESS_TOKEN, ACCESS_SECRET)
-api = tweepy.API(auth)
-api.update_status("Your tweet here")  # Works if keys have write access
-
+client = tweepy.Client(
+    consumer_key=API_KEY,
+    consumer_secret=API_SECRET,
+    access_token=ACCESS_TOKEN,
+    access_token_secret=ACCESS_SECRET 
 # ------------------------ Load posted_today ------------------------
 if os.path.exists(posted_today_file):
     with open(posted_today_file, "r", encoding="utf-8") as f:
