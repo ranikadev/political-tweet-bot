@@ -36,4 +36,4 @@ jobs:
         run: |
 
           echo "🚀 Posting tweets..."
-          python post_fetch_tweets.py
+          python fetchpost1.py
