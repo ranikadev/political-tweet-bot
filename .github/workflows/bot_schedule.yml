@@ -1,30 +1,42 @@
-name: Daily Scrape 5 Accounts + ANI
+name: Political Tweet Bot
 
 on:
   schedule:
-    # 6 PM IST = 12:30 UTC
-    - cron: '15 11 * * *'
+    # fetch_news.py twice a day: 10 AM & 5 PM IST (4:30 & 11:30 UTC)
+    - cron: '30 4 * * *'   # 10:00 AM IST
+    - cron: '30 11 * * *'  # 5:00 PM IST
+    # post_tweets.py hourly 10 AM → 1 AM IST (4–19 UTC)
+    - cron: '0 4-19 * * *'
   workflow_dispatch:
 
 jobs:
-  scrape:
+  run-bot:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+    - name: Checkout Repo
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
 
-      - name: Install snscrape & tweepy
-        run: pip install snscrape tweepy
+    - name: Install Dependencies
+      run: |
+        pip install tweepy googletrans==4.0.0-rc1 feedparser transformers torch
 
-      - name: Run daily scrape
-        env:
-          API_KEY: ${{ secrets.API_KEY }}
-          API_SECRET: ${{ secrets.API_SECRET }}
-          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-          ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
-        run: python daily_scrape.py
+    # ------------------- Run fetch_news.py -------------------
+    - name: Run fetch_news.py
+      if: github.event_name == 'schedule' && (github.event.schedule == '30 4 * * *' || github.event.schedule == '30 11 * * *')
+      run: python fetch_news.py
+
+    # ------------------- Run post_tweets.py -------------------
+    - name: Run post_tweets.py
+      if: github.event_name == 'schedule' && github.event.schedule != '30 4 * * *' && github.event.schedule != '30 11 * * *'
+      run: python post_tweets.py
+      env:
+        API_KEY: ${{ secrets.API_KEY }}
+        API_SECRET: ${{ secrets.API_SECRET }}
+        ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+        ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
