@@ -1,96 +1,105 @@
 import os
 import json
-import feedparser
+import requests
+from bs4 import BeautifulSoup
 from datetime import datetime
 import random
 
-# ------------------------ Setup ------------------------
+# ------------------------ Folders ------------------------
 os.makedirs("scraped_tweets", exist_ok=True)
+morning_file = "scraped_tweets/morning.json"
+evening_file = "scraped_tweets/evening.json"
 
-feeds = {
-    "ANI": "https://www.aninews.in/rssfeed.xml",
-    "NDTV": "https://feeds.feedburner.com/ndtvnews-politics",
-    "Hindu": "https://www.thehindu.com/news/national/feeder/default.rss",
-    "IE": "https://indianexpress.com/section/india/feed/"
+# ------------------------ Keyword Scoring ------------------------
+keyword_scores = {
+    # Political Leaders & Parties
+    "BJP":2, "Modi":2, "Amit Shah":2, "Congress":2, "Rahul Gandhi":2, "Sonia Gandhi":2,
+    "Opposition":2, "PM":2, "CM":2, "Ministers":2, "MPs":2,
+
+    # Scandal / Corruption
+    "Corruption":3, "Scam":3, "Bribery":3, "Nepotism":3, "Cronyism":3,
+    "Mismanagement":3, "Fraud":3, "Embezzlement":3, "Criticism":3, "Accusations":3,
+    "Blame":3, "Exposed":3, "Shocking":3,
+
+    # Social Issues
+    "Lynching":3, "Communal":3, "Religious tension":3, "Caste":3, "Discrimination":3,
+    "Inequality":3, "Farmers":3, "Unemployment":3, "Poverty":3, "Rights":3, "Freedom":3,
+    "Protest":3, "Violence":3,
+
+    # Policy & Governance
+    "Election":2, "Vote":2, "Parliament":2, "Bill":2, "Policy":2, "Reform":2, "Law":2,
+    "Regulation":2, "Ban":2, "Restriction":2, "Controversial law":2, "Government order":2,
+
+    # Events & Current Affairs
+    "Protests":2, "Rallies":2, "Strikes":2, "Sports":2, "Cricket":2, "Olympics":2,
+    "Natural disaster":2, "Flood":2, "Cyclone":2, "Earthquake":2, "Government response":2,
+
+    # Emotive / Attention-grabbing
+    "Questioning":1, "Must know":1, "People are asking":1, "Alert":1,
+    "Controversy":1, "Uncovered":1, "Breaking":1
 }
 
-keywords = [
-    "BJP", "Congress", "Modi", "Rahul Gandhi", "election", "corruption",
-    "lynching", "discrimination", "cricket", "policy", "government"
-]
+# ------------------------ Scrape function ------------------------
+def fetch_news_from_url(url):
+    headlines = []
+    try:
+        res = requests.get(url, timeout=5)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        # Example: take all <h3> or <a> tags depending on site
+        for h in soup.find_all(['h3','a']):
+            text = h.get_text().strip()
+            if len(text) > 20:  # skip too short headlines
+                headlines.append(text)
+    except Exception as e:
+        print(f"[{datetime.now()}] ⚠️ Failed to fetch {url}: {e}")
+    return headlines
 
-# Minimum headlines to ensure per scrape
-MIN_HEADLINES = 15
+# ------------------------ Scoring ------------------------
+def score_headline(title):
+    score = 0
+    for k, v in keyword_scores.items():
+        if k.lower() in title.lower():
+            score += v
+    return score
 
-# ------------------------ Determine File ------------------------
-hour = datetime.now().hour
-filename = "morning.json" if 5 <= hour < 17 else "evening.json"
-filepath = f"scraped_tweets/{filename}"
+# ------------------------ Main ------------------------
+def fetch_and_save(file_path, min_count=15):
+    urls = [
+        "https://www.ndtv.com/latest-news",
+        "https://timesofindia.indiatimes.com/india",
+        "https://www.indiatoday.in/news",
+        "https://www.hindustantimes.com/india-news"
+    ]
 
-all_headlines = []
+    all_headlines = []
+    for url in urls:
+        headlines = fetch_news_from_url(url)
+        for h in headlines:
+            s = score_headline(h)
+            all_headlines.append({
+                "title": h,
+                "link": url,
+                "topic": "Politics/Current Affairs",
+                "score": s
+            })
 
-# ------------------------ Categorize Headline ------------------------
-def categorize_headline(title):
-    title_lower = title.lower()
-    if any(k in title_lower for k in ["bjp", "modi"]):
-        return "BJP"
-    elif any(k in title_lower for k in ["congress", "rahul gandhi"]):
-        return "Congress"
-    else:
-        return "Other"
+    # Remove duplicates & sort by score descending
+    seen = set()
+    unique_headlines = []
+    for h in sorted(all_headlines, key=lambda x: x['score'], reverse=True):
+        if h['title'] not in seen:
+            unique_headlines.append(h)
+            seen.add(h['title'])
+        if len(unique_headlines) >= min_count:
+            break
 
-# ------------------------ Fetch Headlines ------------------------
-for name, url in feeds.items():
-    feed = feedparser.parse(url)
-    for entry in feed.entries[:50]:  # fetch more entries
-        title = entry.title
-        all_headlines.append({
-            "title": title,
-            "link": entry.link,
-            "source": name,
-            "topic": categorize_headline(title),
-            "keyword_match": any(k.lower() in title.lower() for k in keywords)
-        })
+    # Save JSON
+    with open(file_path, "w", encoding="utf-8") as f:
+        for h in unique_headlines:
+            json.dump(h, f, ensure_ascii=False)
+            f.write("\n")
+    print(f"[{datetime.now()}] ✅ Saved {len(unique_headlines)} headlines to {file_path}")
 
-# ------------------------ Prioritize Keyword Matches ------------------------
-# Keyword headlines first
-keyword_headlines = [h for h in all_headlines if h["keyword_match"]]
-non_keyword_headlines = [h for h in all_headlines if not h["keyword_match"]]
-
-# Combine, keyword headlines first, remove duplicates
-unique_titles = set()
-final_headlines = []
-
-for h in keyword_headlines + non_keyword_headlines:
-    if h["title"] not in unique_titles:
-        final_headlines.append({
-            "title": h["title"],
-            "link": h["link"],
-            "source": h["source"],
-            "topic": h["topic"]
-        })
-        unique_titles.add(h["title"])
-    if len(final_headlines) >= MIN_HEADLINES:
-        break
-
-# ------------------------ Ensure Minimum Headlines ------------------------
-if len(final_headlines) < MIN_HEADLINES:
-    # Fill from all feeds randomly
-    remaining = MIN_HEADLINES - len(final_headlines)
-    candidates = [h for h in all_headlines if h["title"] not in unique_titles]
-    random.shuffle(candidates)
-    for h in candidates[:remaining]:
-        final_headlines.append({
-            "title": h["title"],
-            "link": h["link"],
-            "source": h["source"],
-            "topic": h["topic"]
-        })
-
-# ------------------------ Save to File ------------------------
-with open(filepath, "w", encoding="utf-8") as f:
-    for item in final_headlines:
-        json.dump(item, f, ensure_ascii=False)
-        f.write("\n")
-
-print(f"[{datetime.now()}] ✅ Saved {len(final_headlines)} headlines to {filename}")
+# ------------------------ Run ------------------------
+fetch_and_save(morning_file, min_count=15)
+fetch_and_save(evening_file, min_count=15)
