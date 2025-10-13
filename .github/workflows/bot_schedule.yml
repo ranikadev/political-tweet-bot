@@ -35,7 +35,7 @@ jobs:
   
       run: python post_tweets.py
       env:
-        BEARER_TOKEN: ${{ secret.BEARER_TOKEN }}
+        BEARER_TOKEN: ${{ secrets.BEARER_TOKEN }}
         API_KEY: ${{ secrets.API_KEY }}
         API_SECRET: ${{ secrets.API_SECRET }}
         ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
