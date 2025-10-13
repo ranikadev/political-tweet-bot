@@ -197,4 +197,8 @@ def advanced_rephrase_specific(headline, reason, impact):
     new_title = " ".join(new_words)
     # Expand to ~250 chars if short
     if len(new_title) < 200:
-        new_title += " | " + reason + ". This development is significant and may affect the related parties. Further details suggest impact and context
+    new_title += (
+        " | " + reason +
+        ". This development is significant and may affect the related parties. "
+        "Further details suggest impact and context."
+    )
