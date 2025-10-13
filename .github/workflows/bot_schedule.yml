@@ -4,7 +4,7 @@ on:
   schedule:
     # fetch_news.py twice a day: 10 AM & 5 PM IST (4:30 & 11:30 UTC)
     - cron: '30 4 * * *'   # 10:00 AM IST
-    - cron: '30 11 * * *'  # 5:00 PM IST
+    - cron: '55 12 * * *'  # 5:00 PM IST
     # post_tweets.py hourly 10 AM → 1 AM IST (4–19 UTC)
     - cron: '0 4-19 * * *'
   workflow_dispatch:
@@ -28,12 +28,12 @@ jobs:
 
     # ------------------- Run fetch_news.py -------------------
     - name: Run fetch_news.py
-      if: github.event_name == 'schedule' && (github.event.schedule == '30 4 * * *' || github.event.schedule == '30 11 * * *')
+      if: github.event_name == 'schedule' && (github.event.schedule == '30 4 * * *' || github.event.schedule == '55 12 * * *')
       run: python fetch_news.py
 
     # ------------------- Run post_tweets.py -------------------
     - name: Run post_tweets.py
-      if: github.event_name == 'schedule' && github.event.schedule != '30 4 * * *' && github.event.schedule != '30 11 * * *'
+      if: github.event_name == 'schedule' && github.event.schedule != '30 4 * * *' && github.event.schedule != '55 12 * * *'
       run: python post_tweets.py
       env:
         API_KEY: ${{ secrets.API_KEY }}
