@@ -33,12 +33,19 @@ else:
 def load_headlines(file_path):
     if not os.path.exists(file_path):
         return []
+    data = []
     with open(file_path,"r",encoding="utf-8") as f:
-        data = [json.loads(line) for line in f if line.strip()]
+        for i, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data.append(json.loads(line))
+            except json.JSONDecodeError as e:
+                print(f"[WARN {datetime.now()}] Skipping invalid JSON line {i} in {file_path}: {e}")
     return data
 
 def pick_headline_weighted(headlines):
-    # fallback if no headline has score >0
     weighted = [h for h in headlines if h.get('score',0)>0]
     if weighted:
         return random.choices(weighted, weights=[h['score'] for h in weighted], k=1)[0]
@@ -132,7 +139,6 @@ def main():
         candidate = pick_headline_weighted(all_headlines)
         if not candidate:
             break
-        # IR limit
         if candidate.get('topic')=="International Relations" and posted_today.get("IR_count",0)>=3:
             tries+=1
             continue
