@@ -25,7 +25,8 @@ ACCESS_SECRET = os.environ.get('ACCESS_SECRET')
 
 auth = tweepy.OAuthHandler(API_KEY, API_SECRET)
 auth.set_access_token(ACCESS_TOKEN, ACCESS_SECRET)
-client = tweepy.API(auth)
+api = tweepy.API(auth)
+api.update_status("Your tweet here")  # Works if keys have write access
 
 # ------------------------ Load posted_today ------------------------
 if os.path.exists(posted_today_file):
