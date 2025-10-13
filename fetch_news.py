@@ -4,10 +4,9 @@ import feedparser
 from datetime import datetime
 import random
 
-# Create folder if not exists
+# ------------------------ Setup ------------------------
 os.makedirs("scraped_tweets", exist_ok=True)
 
-# RSS feeds
 feeds = {
     "ANI": "https://www.aninews.in/rssfeed.xml",
     "NDTV": "https://feeds.feedburner.com/ndtvnews-politics",
@@ -20,13 +19,17 @@ keywords = [
     "lynching", "discrimination", "cricket", "policy", "government"
 ]
 
-# Determine file name based on current hour
+# Minimum headlines to ensure per scrape
+MIN_HEADLINES = 15
+
+# ------------------------ Determine File ------------------------
 hour = datetime.now().hour
 filename = "morning.json" if 5 <= hour < 17 else "evening.json"
 filepath = f"scraped_tweets/{filename}"
 
 all_headlines = []
 
+# ------------------------ Categorize Headline ------------------------
 def categorize_headline(title):
     title_lower = title.lower()
     if any(k in title_lower for k in ["bjp", "modi"]):
@@ -36,42 +39,58 @@ def categorize_headline(title):
     else:
         return "Other"
 
-# Fetch headlines
+# ------------------------ Fetch Headlines ------------------------
 for name, url in feeds.items():
     feed = feedparser.parse(url)
-    for entry in feed.entries[:30]:  # latest 30 headlines
+    for entry in feed.entries[:50]:  # fetch more entries
         title = entry.title
-        if any(k.lower() in title.lower() for k in keywords):
-            all_headlines.append({
-                "title": title,
-                "link": entry.link,
-                "source": name,
-                "topic": categorize_headline(title)
-            })
+        all_headlines.append({
+            "title": title,
+            "link": entry.link,
+            "source": name,
+            "topic": categorize_headline(title),
+            "keyword_match": any(k.lower() in title.lower() for k in keywords)
+        })
 
-# Ensure at least 5 headlines
-if len(all_headlines) < 5:
-    # Take random headlines from feeds ignoring keywords if needed
-    for name, url in feeds.items():
-        feed = feedparser.parse(url)
-        for entry in feed.entries[:10]:
-            candidate = {
-                "title": entry.title,
-                "link": entry.link,
-                "source": name,
-                "topic": categorize_headline(entry.title)
-            }
-            if candidate not in all_headlines:
-                all_headlines.append(candidate)
-            if len(all_headlines) >= 5:
-                break
-        if len(all_headlines) >= 5:
-            break
+# ------------------------ Prioritize Keyword Matches ------------------------
+# Keyword headlines first
+keyword_headlines = [h for h in all_headlines if h["keyword_match"]]
+non_keyword_headlines = [h for h in all_headlines if not h["keyword_match"]]
 
-# Save to JSON Lines file
+# Combine, keyword headlines first, remove duplicates
+unique_titles = set()
+final_headlines = []
+
+for h in keyword_headlines + non_keyword_headlines:
+    if h["title"] not in unique_titles:
+        final_headlines.append({
+            "title": h["title"],
+            "link": h["link"],
+            "source": h["source"],
+            "topic": h["topic"]
+        })
+        unique_titles.add(h["title"])
+    if len(final_headlines) >= MIN_HEADLINES:
+        break
+
+# ------------------------ Ensure Minimum Headlines ------------------------
+if len(final_headlines) < MIN_HEADLINES:
+    # Fill from all feeds randomly
+    remaining = MIN_HEADLINES - len(final_headlines)
+    candidates = [h for h in all_headlines if h["title"] not in unique_titles]
+    random.shuffle(candidates)
+    for h in candidates[:remaining]:
+        final_headlines.append({
+            "title": h["title"],
+            "link": h["link"],
+            "source": h["source"],
+            "topic": h["topic"]
+        })
+
+# ------------------------ Save to File ------------------------
 with open(filepath, "w", encoding="utf-8") as f:
-    for item in all_headlines:
+    for item in final_headlines:
         json.dump(item, f, ensure_ascii=False)
         f.write("\n")
 
-print(f"[{datetime.now()}] ✅ Saved {len(all_headlines)} headlines to {filename}")
+print(f"[{datetime.now()}] ✅ Saved {len(final_headlines)} headlines to {filename}")
