@@ -243,3 +243,21 @@ def main():
     if not tweet_obj:
         print(f"[WARN {datetime.now()}] Weighted pick failed, using fallback headline")
         tweet_obj = random.choice(all_headlines)         
+    # Generate tweet
+    reason, impact = get_reason_impact(tweet_obj)
+    tweet_text = advanced_rephrase_specific(tweet_obj['title'], reason, impact)
+    print(f"[DEBUG {datetime.now()}] Selected headline: {tweet_text[:100]}...")
+
+    # Post tweet
+    post_tweet(tweet_text)
+
+    # Update counts
+    if tweet_obj.get('topic') == "International Relations":
+        posted_today["IR_count"] = posted_today.get("IR_count", 0) + 1
+
+    # Save posted_today
+    with open(posted_today_file, "w", encoding="utf-8") as f:
+        json.dump(posted_today, f, ensure_ascii=False, indent=2)
+
+if __name__ == "__main__":
+    main()
