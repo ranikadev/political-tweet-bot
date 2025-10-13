@@ -1,4 +1,4 @@
-name: Twitter Bot (Fetch + Post Hourly)
+name: Twitter Bot (FetchPost Hourly)
 
 on:
   schedule:
