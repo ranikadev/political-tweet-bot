@@ -6,7 +6,12 @@ on:
     - cron: '03 03,09,12 * * *'  # 9:00, 15:00, 18:00 IST
     # Post tweets hourly 10:00 → 01:00 IST
     - cron: '30 04-19 * * *'     # 10:00 → 01:00 IST
-  workflow_dispatch:  # manual trigger
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Which task to run? (fetch or post)'
+        required: false
+        default: 'post'
 
 jobs:
   run-bot:
@@ -35,16 +40,26 @@ jobs:
 
     - name: Run Script
       run: |
+        # Read current UTC hour
         HOUR_UTC=$(date -u +"%H")
-        # Run fetch_news.py only at 03, 09, 12 UTC
-        if [[ "$HOUR_UTC" == "03" || "$HOUR_UTC" == "09" || "$HOUR_UTC" == "12" ]]; then
-            echo "[INFO] Running fetch_news.py"
+        INPUT_TASK="${{ github.event.inputs.task }}"
+
+        if [[ "$INPUT_TASK" == "fetch" ]]; then
+            echo "[Manual Run] Running fetch_news.py"
             python fetch_news.py
-        else
-            echo "[INFO] Running post_tweets.py with random delay"
-            # Random delay 0-20 min (~±10 min)
-            DELAY=$(( RANDOM % 20 ))
-            echo "Sleeping for $DELAY minutes..."
-            sleep ${DELAY}m
+        elif [[ "$INPUT_TASK" == "post" ]]; then
+            echo "[Manual Run] Running post_tweets.py"
             python post_tweets.py
+        else
+            # Automatic schedule mode
+            if [[ "$HOUR_UTC" == "03" || "$HOUR_UTC" == "09" || "$HOUR_UTC" == "12" ]]; then
+                echo "[Auto Run] Running fetch_news.py"
+                python fetch_news.py
+            else
+                echo "[Auto Run] Running post_tweets.py with random delay"
+                DELAY=$(( RANDOM % 20 ))
+                echo "Sleeping for $DELAY minutes..."
+                sleep ${DELAY}m
+                python post_tweets.py
+            fi
         fi
