@@ -1,42 +1,51 @@
-name: Political Tweet Bot
+name: Twitter Bot Automation
 
 on:
   schedule:
-    # fetch_news.py twice a day: 10 AM & 5 PM IST (4:30 & 11:30 UTC)
-    - cron: '30 4 * * *'   # 10:00 AM IST
-    - cron: '5 13 * * *'  # 5:00 PM IST
-    # post_tweets.py hourly 10 AM → 1 AM IST (4–19 UTC)
-    - cron: '0 4-19 * * *'
-  workflow_dispatch:
+    # Fetch news at 9:00, 15:00, 18:00 IST → GitHub Actions uses UTC (IST - 5:30)
+    - cron: '03 3,9,12 * * *'  # 9:00, 15:00, 18:00 IST in UTC
+    # Post tweets hourly 10:00 → 01:00 IST
+    - cron: '30 4-19 * * *'    # 10:00 → 01:00 IST in UTC
+  workflow_dispatch:  # allows manual trigger
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repo
+    - name: Checkout repo
       uses: actions/checkout@v3
 
-    - name: Set up Python
+    - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
 
-    - name: Install Dependencies
+    - name: Install dependencies
       run: |
-        pip install tweepy googletrans==4.0.0-rc1 feedparser transformers torch
+        python -m pip install --upgrade pip
+        pip install tweepy requests beautifulsoup4 googletrans==4.0.0-rc1
 
-    # ------------------- Run fetch_news.py -------------------
-    - name: Run fetch_news.py
-      run: python fetch_news.py
+    - name: Set environment variables
+      run: |
+        echo "API_KEY=${{ secrets.API_KEY }}" >> $GITHUB_ENV
+        echo "API_SECRET=${{ secrets.API_SECRET }}" >> $GITHUB_ENV
+        echo "ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }}" >> $GITHUB_ENV
+        echo "ACCESS_SECRET=${{ secrets.ACCESS_SECRET }}" >> $GITHUB_ENV
 
-    # ------------------- Run post_tweets.py -------------------
-    - name: Run post_tweets.py
-  
-      run: python post_tweets.py
-      env:
-        BEARER_TOKEN: ${{ secrets.BEARER_TOKEN }}
-        API_KEY: ${{ secrets.API_KEY }}
-        API_SECRET: ${{ secrets.API_SECRET }}
-        ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-        ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
+    - name: Run Script
+      run: |
+        # Determine which script to run based on hour
+        HOUR_UTC=$(date -u +"%H")
+        # Fetch news times: 3, 9, 12 UTC → 9, 15, 18 IST
+        if [[ "$HOUR_UTC" == "03" || "$HOUR_UTC" == "09" || "$HOUR_UTC" == "12" ]]; then
+            echo "[INFO] Running fetch_news.py"
+            python fetch_news.py
+        else
+            echo "[INFO] Running post_tweets.py with random delay"
+            # Random delay ±10 min (0-20 min) before posting
+            DELAY=$(( RANDOM % 20 ))
+            echo "Sleeping for $DELAY minutes..."
+            sleep ${DELAY}m
+            python post_tweets.py
+        fi
