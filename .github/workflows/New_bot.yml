@@ -34,4 +34,4 @@ jobs:
 
       - name: Run fetch and post
         run: |
-          python fetchpost2.py
+          python fetchpost1.py
