@@ -250,5 +250,60 @@ def post_tweet(text):
         print(f"[{datetime.now()}] ❌ Failed to post tweet: {e}")
 
 # ------------------------ Main ------------------------
+# ------------------------ Main ------------------------
 def main():
-    print(f"\n🕒 Fetch & Post started at {datetime.now()
+    print(f"\n🕒 Fetch & Post started at {datetime.now()}\n")
+
+    # Scrape & score
+    morning = assign_scores(scrape_domestic())
+    evening = assign_scores(scrape_domestic())
+    international = assign_scores(scrape_international())
+
+    if morning: save_json(morning, morning_file)
+    if evening: save_json(evening, evening_file)
+    if international: save_json(international, ir_file)
+
+    # Load headlines
+    all_headlines = load_headlines(morning_file) + load_headlines(evening_file) + load_headlines(ir_file)
+    print(f"[DEBUG {datetime.now()}] Total headlines loaded: {len(all_headlines)}")
+
+    if not all_headlines:
+        print(f"[ERROR {datetime.now()}] No headlines available. Exiting.")
+        return
+
+    tweet_obj = None
+    tries = 0
+    while tries < 10:
+        candidate = pick_headline_weighted(all_headlines)
+        if not candidate:
+            break
+        if candidate.get('topic')=="International Relations" and posted_today.get("IR_count",0)>=3:
+            tries += 1
+            continue
+        tweet_obj = candidate
+        break
+
+    if not tweet_obj:
+        tweet_obj = random.choice(all_headlines)
+        print(f"[WARN {datetime.now()}] Using fallback headline")
+
+    # Generate final tweet
+    tweet_text = advanced_rephrase(tweet_obj)
+    print(f"[DEBUG {datetime.now()}] Tweet text: {tweet_text[:100]}...")
+
+    # Post tweet
+    post_tweet(tweet_text)
+
+    # Update IR count
+    if tweet_obj.get('topic')=="International Relations":
+        posted_today["IR_count"] = posted_today.get("IR_count",0)+1
+
+    # Save posted_today.json
+    with open(posted_today_file,"w",encoding="utf-8") as f:
+        json.dump(posted_today,f,ensure_ascii=False, indent=2)
+
+    print(f"\n✅ Fetch & Post completed at {datetime.now()}\n")
+
+
+if __name__=="__main__":
+    main()
