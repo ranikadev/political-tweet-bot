@@ -6,7 +6,10 @@ import re
 from collections import Counter
 import os
 from datetime import datetime
+import os
 
+# Ensure folders exist for storing scraped data
+os.makedirs("scraped_tweets", exist_ok=True)
 # ------------------------ Files ------------------------
 morning_file = "scraped_tweets/morning.json"
 evening_file = "scraped_tweets/evening.json"
