@@ -3,7 +3,7 @@ name: Daily Scrape 5 Accounts + ANI
 on:
   schedule:
     # 6 PM IST = 12:30 UTC
-    - cron: '30 12 * * *'
+    - cron: '15 11 * * *'
   workflow_dispatch:
 
 jobs:
