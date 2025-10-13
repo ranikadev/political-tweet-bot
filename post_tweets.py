@@ -161,37 +161,45 @@ def main():
     international = load_headlines(ir_file)
 
     all_headlines = morning + evening + international
+    print(f"[DEBUG {datetime.now()}] Total headlines loaded: {len(all_headlines)}")
+    for h in all_headlines:
+        print(f"[DEBUG] {h.get('title','')} | Topic: {h.get('topic','')} | Score: {h.get('score',0)}")
+
     tweet_obj = None
     tries = 0
 
     # Pick headline respecting IR limit
-    while tries<10:
+    while tries < 10:
         candidate = pick_headline_weighted(all_headlines)
         if not candidate:
             break
-        if candidate['topic']=="International Relations" and posted_today.get("IR_count",0)>=3:
+        if candidate.get('topic')=="International Relations" and posted_today.get("IR_count",0)>=3:
             tries +=1
             continue
         tweet_obj = candidate
         break
 
+    # Fallback: pick **any headline** if none selected
+    if not tweet_obj and all_headlines:
+        print(f"[WARN {datetime.now()}] Weighted pick failed, using fallback headline")
+        tweet_obj = random.choice(all_headlines)
+
     if not tweet_obj:
-        print(f"[{datetime.now()}] ⚠️ No suitable headline found")
+        print(f"[ERROR {datetime.now()}] No headlines available at all. Exiting.")
         return
 
     reason, impact = get_reason_impact(tweet_obj)
     tweet_text = advanced_rephrase_specific(tweet_obj['title'], reason, impact)
 
+    print(f"[DEBUG {datetime.now()}] Selected headline to tweet: {tweet_text[:100]}...")
+
     # Post tweet
     post_tweet(tweet_text)
 
     # Update IR count
-    if tweet_obj['topic']=="International Relations":
+    if tweet_obj.get('topic')=="International Relations":
         posted_today["IR_count"] = posted_today.get("IR_count",0)+1
 
     # Save posted_today.json
     with open(posted_today_file,"w",encoding="utf-8") as f:
         json.dump(posted_today,f,ensure_ascii=False, indent=2)
-
-if __name__=="__main__":
-    main()
