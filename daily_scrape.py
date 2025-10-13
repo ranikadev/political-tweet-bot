@@ -29,15 +29,15 @@ accounts = [
 
 os.makedirs("scraped_tweets", exist_ok=True)
 
-# Scrape last 5 tweets per account
+# Scrape last 5 tweets per account using snscrape
 for account in accounts:
     output_file = f"scraped_tweets/{account}.json"
     cmd = f"snscrape --jsonl --max-results 5 twitter-user {account} > {output_file}"
     subprocess.run(cmd, shell=True)
-    print(f"[{datetime.now()}] Scraped last 5 tweets from @{account}")
+    print(f"[{datetime.now()}] ✅ Scraped last 5 tweets from @{account}")
 
 # ----------------------------
-# Fetch last 5 tweets from @ANI via API
+# Fetch last 5 tweets from @ANI via Tweepy API
 # ----------------------------
 ani_file = "scraped_tweets/ANI.json"
 try:
@@ -47,6 +47,8 @@ try:
         for t in ani_texts:
             json.dump(t, f)
             f.write("\n")
-    print(f"[{datetime.now()}] Fetched last 5 tweets from @ANI")
-except tweepy.TweepError as e:
-    print(f"[{datetime.now()}] Failed to fetch @ANI tweets: {e}")
+    print(f"[{datetime.now()}] ✅ Fetched last 5 tweets from @ANI")
+except tweepy.errors.TweepyException as e:   # ✅ Updated for Tweepy v4+
+    print(f"[{datetime.now()}] ❌ Failed to fetch @ANI tweets: {e}")
+except Exception as e:
+    print(f"[{datetime.now()}] ⚠️ Unexpected error: {e}")
