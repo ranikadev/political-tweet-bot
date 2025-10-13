@@ -28,6 +28,7 @@ client = tweepy.Client(
     consumer_secret=API_SECRET,
     access_token=ACCESS_TOKEN,
     access_token_secret=ACCESS_SECRET 
+)
 # ------------------------ Load posted_today ------------------------
 if os.path.exists(posted_today_file):
     with open(posted_today_file, "r", encoding="utf-8") as f:
