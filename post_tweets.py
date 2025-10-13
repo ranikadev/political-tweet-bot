@@ -13,7 +13,7 @@ ir_file = os.path.join(base_dir, "international.json")
 posted_today_file = "posted_today.json"
 
 # ------------------------ Twitter API v2 ------------------------
-BEARER_TOKEN = os.environ['BEARER_TOKEN']      # Required for client
+BEARER_TOKEN = os.environ['BEARER_TOKEN']
 API_KEY = os.environ['API_KEY']
 API_SECRET = os.environ['API_SECRET']
 ACCESS_TOKEN = os.environ['ACCESS_TOKEN']
@@ -35,16 +35,19 @@ else:
 
 # ------------------------ Helpers ------------------------
 def load_headlines(file_path):
+    """Load headlines saved as full JSON array."""
     if not os.path.exists(file_path):
         return []
-    with open(file_path,"r",encoding="utf-8") as f:
-        try:
+    try:
+        with open(file_path,"r",encoding="utf-8") as f:
             data = json.load(f)
             return data if isinstance(data,list) else []
-        except json.JSONDecodeError:
-            return []
+    except json.JSONDecodeError as e:
+        print(f"[WARN {datetime.now()}] Failed to load {file_path}: {e}")
+        return []
 
 def pick_headline_weighted(headlines):
+    """Randomly pick weighted headline based on score."""
     weighted = [h for h in headlines if h.get('score',0)>0]
     if weighted:
         return random.choices(weighted, weights=[h['score'] for h in weighted], k=1)[0]
@@ -71,7 +74,7 @@ def get_reason_impact(headline_obj, chance=0.2):
         impact = keyword_impact_map.get(impact_kw,"affecting the concerned groups")
     return reason, impact
 
-def advanced_rephrase_specific(headline, reason, impact):
+def advanced_rephrase_specific(headline, reason, impact, sub_headline=None):
     available_prefixes = [p for p in prefixes if posted_today["prefix"].get(p,0)<2]
     prefix = random.choice(available_prefixes) if available_prefixes else random.choice(prefixes)
     posted_today["prefix"][prefix] = posted_today["prefix"].get(prefix,0)+1
@@ -91,6 +94,8 @@ def advanced_rephrase_specific(headline, reason, impact):
     new_title = " ".join(new_words)
 
     full_text = f"{prefix} {emoji} {new_title}"
+    if sub_headline:
+        full_text += f" – {sub_headline}"
     if reason:
         full_text += f" ({reason})"
     if impact:
@@ -117,6 +122,10 @@ def main():
     all_headlines = morning + evening + international
     print(f"[DEBUG {datetime.now()}] Total headlines loaded: {len(all_headlines)}")
 
+    if not all_headlines:
+        print(f"[ERROR {datetime.now()}] No headlines available at all. Exiting.")
+        return
+
     tweet_obj = None
     tries = 0
 
@@ -130,16 +139,17 @@ def main():
         tweet_obj = candidate
         break
 
-    if not tweet_obj and all_headlines:
+    if not tweet_obj:
         print(f"[WARN {datetime.now()}] Weighted pick failed, using fallback headline")
         tweet_obj = random.choice(all_headlines)
 
-    if not tweet_obj:
-        print(f"[ERROR {datetime.now()}] No headlines available at all. Exiting.")
-        return
-
     reason, impact = get_reason_impact(tweet_obj)
-    tweet_text = advanced_rephrase_specific(tweet_obj['title'], reason, impact)
+    tweet_text = advanced_rephrase_specific(
+        tweet_obj['title'], 
+        reason, 
+        impact,
+        sub_headline=tweet_obj.get("sub")
+    )
     print(f"[DEBUG {datetime.now()}] Selected headline: {tweet_text[:100]}...")
 
     post_tweet(tweet_text)
