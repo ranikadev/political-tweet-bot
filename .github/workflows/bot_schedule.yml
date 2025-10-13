@@ -26,6 +26,7 @@ jobs:
 
       - name: Set environment variables
         run: |
+          echo "BEARER_TOKEN=${{ secrets.BEARER_TOKEN }}" >> $GITHUB_ENV
           echo "API_KEY=${{ secrets.API_KEY }}" >> $GITHUB_ENV
           echo "API_SECRET=${{ secrets.API_SECRET }}" >> $GITHUB_ENV
           echo "ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }}" >> $GITHUB_ENV
