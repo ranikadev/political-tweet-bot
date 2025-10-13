@@ -5,6 +5,7 @@ import tweepy
 import re
 from datetime import datetime
 from googletrans import Translator
+from collections import Counter
 
 # ------------------------ Twitter Credentials ------------------------
 API_KEY = os.environ['API_KEY']
@@ -78,10 +79,10 @@ def load_headlines(file_path):
     return headlines
 
 # ------------------------ Pick Headline Weighted by Score ------------------------
-def pick_headline(headlines):
+def pick_headline_weighted(headlines):
     weighted_list = []
     for h in headlines:
-        weighted_list.extend([h]*max(h.get('score',1),1))
+        weighted_list.extend([h]*max(int(h.get('score',1)),1))
     if weighted_list:
         return random.choice(weighted_list)
     return None
@@ -93,8 +94,6 @@ def get_reason_impact(headline_obj, chance=0.2):
     
     if not reason and not impact and random.random() <= chance:
         words = re.findall(r'\w+', headline_obj['title'].lower())
-        
-        # Reason
         reason_kw = next((k for k in keyword_impact_map if k.lower() in words), None)
         if reason_kw:
             reason_templates = [
@@ -105,8 +104,6 @@ def get_reason_impact(headline_obj, chance=0.2):
             reason = random.choice(reason_templates)
         else:
             reason = "due to recent developments"
-        
-        # Impact
         impact_kw = next((k for k in keyword_impact_map if k.lower() in words), None)
         impact = keyword_impact_map.get(impact_kw,"affecting the concerned groups")
     
@@ -135,67 +132,66 @@ def advanced_rephrase_specific(headline, reason, impact):
             new_words.append(w)
     new_title = " ".join(new_words)
 
-    # Add reason + impact if present
-    extra = ""
-    if reason: extra += f", {reason}"
-    if impact: extra += f", {impact}"
+    # Final headline construction
+    full_text = f"{prefix} {emoji} {new_title}"
+    if reason:
+        full_text += f" ({reason})"
+    if impact:
+        full_text += f", impacting {impact}"
 
-    base_text = f"{emoji} {prefix} {new_title}{extra}."
-    
-    if len(base_text)>275:
-        base_text = base_text[:272]+"..."
-    elif len(base_text)<250:
-        base_text += " Stay updated."
-    return base_text
+    # Truncate if longer than 275 chars
+    if len(full_text)>275:
+        full_text = full_text[:272]+"..."
+
+    return full_text
 
 # ------------------------ Post Tweet ------------------------
-def post_tweet(headline_obj):
+def post_tweet(text):
     try:
-        reason, impact = get_reason_impact(headline_obj)
-        text_en = advanced_rephrase_specific(headline_obj['title'], reason, impact)
-        
-        # Translate to Hindi
-        try:
-            text_hi = translator.translate(text_en, src='en', dest='hi').text
-        except:
-            text_hi = text_en
-
-        api.update_status(text_hi)
-        print(f"[{datetime.now()}] ✅ Posted: {text_hi}")
-
-        # Update IR count if needed
-        if headline_obj.get('topic')=='International Relations':
-            posted_today["IR_count"] = posted_today.get("IR_count",0)+1
-
-        # Save posted_today
-        with open(posted_today_file,"w") as f:
-            json.dump(posted_today,f)
-    except Exception as e:
+        api.update_status(status=text)
+        print(f"[{datetime.now()}] ✅ Tweet posted successfully")
+    except tweepy.TweepError as e:
         print(f"[{datetime.now()}] ❌ Failed to post tweet: {e}")
 
 # ------------------------ Main ------------------------
-current_hour = datetime.now().hour
-file_to_use = morning_file if 6 <= current_hour < 12 else evening_file
+def main():
+    # Load headlines
+    morning = load_headlines(morning_file)
+    evening = load_headlines(evening_file)
+    international = load_headlines(ir_file)
 
-# Load all headlines
-all_headlines = load_headlines(file_to_use) + load_headlines(ir_file)
+    all_headlines = morning + evening + international
+    tweet_obj = None
+    tries = 0
 
-# Separate IR and domestic
-ir_headlines = [h for h in all_headlines if h.get('topic')=='International Relations']
-domestic_headlines = [h for h in all_headlines if h.get('topic')!='International Relations']
+    # Pick headline respecting IR limit
+    while tries<10:
+        candidate = pick_headline_weighted(all_headlines)
+        if not candidate:
+            break
+        if candidate['topic']=="International Relations" and posted_today.get("IR_count",0)>=3:
+            tries +=1
+            continue
+        tweet_obj = candidate
+        break
 
-# Apply IR limit: max 3/day
-if posted_today.get("IR_count",0) >=3:
-    eligible_headlines = domestic_headlines
-else:
-    eligible_headlines = domestic_headlines + ir_headlines
+    if not tweet_obj:
+        print(f"[{datetime.now()}] ⚠️ No suitable headline found")
+        return
 
-# Pick headline
-if eligible_headlines:
-    headline = pick_headline(eligible_headlines)
-    if headline:
-        post_tweet(headline)
-    else:
-        print(f"[{datetime.now()}] ⚠️ No headline picked")
-else:
-    print(f"[{datetime.now()}] ⚠️ No headlines available to post")
+    reason, impact = get_reason_impact(tweet_obj)
+    tweet_text = advanced_rephrase_specific(tweet_obj['title'], reason, impact)
+
+    # Post tweet
+    post_tweet(tweet_text)
+
+    # Update IR count
+    if tweet_obj['topic']=="International Relations":
+        posted_today["IR_count"] = posted_today.get("IR_count",0)+1
+
+    # Save posted_today.json
+    with open(posted_today_file,"w",encoding="utf-8") as f:
+        json.dump(posted_today,f,ensure_ascii=False, indent=2)
+
+if __name__=="__main__":
+    main()
