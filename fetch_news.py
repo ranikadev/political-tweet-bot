@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import random
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -42,9 +43,8 @@ topic_weights = {
 }
 
 # ------------------------ Scraping functions ------------------------
-
 def extract_headlines(url):
-    """Scrape h2/h3/h4 text from URL."""
+    """Scrape h1/h2/h3/h4 text from URL."""
     headlines = []
     try:
         r = requests.get(url, headers=headers, timeout=10)
@@ -90,7 +90,6 @@ def scrape_international():
     return headlines[:50]
 
 # ------------------------ Scoring ------------------------
-
 def assign_scores(headlines):
     all_words = []
     for h in headlines:
@@ -108,12 +107,28 @@ def assign_scores(headlines):
         h['score'] = h_score
     return headlines
 
-# ------------------------ Save ------------------------
+# ------------------------ Save JSON lines ------------------------
+def save_json(headlines, file_path, min_items=15):
+    sorted_headlines = sorted(headlines, key=lambda x: x.get('score', 1), reverse=True)
+    
+    # Ensure minimum items
+    if len(sorted_headlines) < min_items:
+        for i in range(min_items - len(sorted_headlines)):
+            sorted_headlines.append({
+                "title": f"Placeholder news {i+1}",
+                "score": 1,
+                "topic": "Misc",
+                "url": ""
+            })
 
-def save_json(headlines, file_path):
-    top_items = sorted(headlines, key=lambda x: x['score'], reverse=True)[:max(15, len(headlines)//3)]
+    top_items = sorted_headlines[:min_items]
+
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(top_items, f, ensure_ascii=False, indent=2)
+        for item in top_items:
+            json.dump(item, f, ensure_ascii=False)
+            f.write("\n")
+
     print(f"💾 Saved {len(top_items)} -> {file_path}")
 
 # ------------------------ Main ------------------------
@@ -124,11 +139,8 @@ if __name__ == "__main__":
     evening_headlines = assign_scores(scrape_domestic())
     ir_headlines = assign_scores(scrape_international())
 
-    if morning_headlines:
-        save_json(morning_headlines, morning_file)
-    if evening_headlines:
-        save_json(evening_headlines, evening_file)
-    if ir_headlines:
-        save_json(ir_headlines, ir_file)
+    save_json(morning_headlines, morning_file)
+    save_json(evening_headlines, evening_file)
+    save_json(ir_headlines, ir_file)
 
     print(f"\n✅ Completed at {datetime.now()}\n")
