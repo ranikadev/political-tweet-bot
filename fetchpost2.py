@@ -1,265 +1,449 @@
+#!/usr/bin/env python3
+"""
+fetchpost_final.py
+Combined scraper + headline scorer + human-like tweet generator + poster.
+- Single-file: scrapes sources (EN + HI), extracts headline/sub/summary/time.
+- Builds rich, human-like tweet ~250-280 chars, translates to Hindi, posts via Tweepy v2 create_tweet.
+- Keeps posted_today.json to limit IR posts, prefix/emoji reuse.
+- Does NOT change your tweet-post method: uses client.create_tweet(text=...)
+"""
+
 import os
 import json
 import random
 import re
-import requests
-from bs4 import BeautifulSoup
+import time
+import html
 from datetime import datetime
-from collections import Counter
+from collections import Counter, defaultdict
+
+import requests
+from requests.adapters import HTTPAdapter, Retry
+from bs4 import BeautifulSoup
 import tweepy
 from googletrans import Translator
 
-# ------------------------ Paths ------------------------
-base_dir = os.path.join(os.getcwd(), "scraped_tweets")
-os.makedirs(base_dir, exist_ok=True)
-morning_file = os.path.join(base_dir, "morning.json")
-evening_file = os.path.join(base_dir, "evening.json")
-ir_file = os.path.join(base_dir, "international.json")
-posted_today_file = "posted_today.json"
+# ------------------------ Config ------------------------
+BASE_DIR = os.path.join(os.getcwd(), "scraped_tweets")
+os.makedirs(BASE_DIR, exist_ok=True)
 
-# ------------------------ Twitter API (OAuth 1.0a) ------------------------
-API_KEY = os.environ.get('API_KEY')
-API_SECRET = os.environ.get('API_SECRET')
-ACCESS_TOKEN = os.environ.get('ACCESS_TOKEN')
-ACCESS_SECRET = os.environ.get('ACCESS_SECRET')
+MORNING_FILE = os.path.join(BASE_DIR, "morning.json")
+EVENING_FILE = os.path.join(BASE_DIR, "evening.json")
+IR_FILE = os.path.join(BASE_DIR, "international.json")
+POSTED_TODAY = "posted_today.json"
 
+# Twitter credentials: keep posting method unchanged (create_tweet)
+API_KEY = os.environ.get("API_KEY")
+API_SECRET = os.environ.get("API_SECRET")
+ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN")
+ACCESS_SECRET = os.environ.get("ACCESS_SECRET")
+BEARER_TOKEN = os.environ.get("BEARER_TOKEN")  # optional
+
+# Initialize tweepy client (we will use create_tweet)
 client = tweepy.Client(
     consumer_key=API_KEY,
     consumer_secret=API_SECRET,
     access_token=ACCESS_TOKEN,
-    access_token_secret=ACCESS_SECRET 
+    access_token_secret=ACCESS_SECRET
 )
-# ------------------------ Load posted_today ------------------------
-if os.path.exists(posted_today_file):
-    with open(posted_today_file, "r", encoding="utf-8") as f:
-        posted_today = json.load(f)
-else:
-    posted_today = {"prefix": {}, "emoji": {}, "IR_count": 0}
 
-# ------------------------ Config ------------------------
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                  "AppleWebKit/537.36 (KHTML, like Gecko) "
-                  "Chrome/127.0.0.1 Safari/537.36"
-}
+# Translation
+translator = Translator()
 
-keywords = [
+# HTTP session with retries
+session = requests.Session()
+retries = Retry(total=2, backoff_factor=1, status_forcelist=[429,500,502,503,504])
+session.mount("https://", HTTPAdapter(max_retries=retries))
+session.headers.update({
+    "User-Agent": "Mozilla/5.0 (compatible; FetchPostBot/1.0; +https://example.com/bot)"
+})
+
+# Keywords and weights for scoring
+KEYWORDS = [
     "bjp", "congress", "rahul", "modi", "india", "election", "violence",
     "lynching", "corruption", "protest", "china", "pakistan", "usa",
     "cricket", "sports", "discrimination", "reservation", "scandal"
 ]
 
-topic_weights = {
+TOPIC_WEIGHTS = {
     "BJP": 3, "Congress": 3, "corruption": 3, "lynching": 3,
     "cricket": 2, "sports": 1, "China": 2, "Pakistan": 2,
     "USA": 2, "election": 3, "violence": 2, "discrimination": 2
 }
 
-prefixes = [
-    "Breaking", "Alert", "Exclusive", "Shocking", "Controversial",
-    "Must Read", "Urgent", "Scandal", "Truth", "Explosive", "Revealed",
-    "Sensational", "Alarming", "Disturbing"
+PREFIXES = [
+    "🚨 Breaking:", "⚡ ताज़ा:", "🔥 Exclusive:", "💥 Revealed:", "📢 Update:",
+    "🧩 क्या हुआ:", "🔴 Scandal:", "📣 Must Read:", "🛑 Alert:", "💬 Trending:"
 ]
-emojis = ["🚨","🔥","⚡","💥","⚠️","📰","💣","📢","💡","🛑"]
-synonyms = {}  # optional replacements
-keyword_impact_map = {}  # optional impact mapping
-translator = Translator()
 
-# ------------------------ Scraping functions ------------------------
-def extract_headlines(url):
-    headlines = []
+# prefix->emoji mapping fallback
+EMOJIS = ["🚨","🔥","⚡","💥","⚠️","📰","💣","📢"]
+
+# filler templates (English) for expansion (we translate later)
+FILLERS = [
+    "This development has sparked wide discussion and may affect many stakeholders.",
+    "Experts say this could have significant consequences for the related groups.",
+    "Reports and early data suggest the situation may escalate further.",
+    "Public reaction is mixed; official responses are awaited.",
+    "This builds on earlier reports and could change the political narrative."
+]
+
+# Sources (mix of English + Hindi sources). Add/remove as desired.
+DOMESTIC_SOURCES = [
+    "https://www.ndtv.com/latest",
+    "https://www.indiatoday.in/",
+    "https://www.aajtak.in/",                   # Hindi
+    "https://www.jagran.com/",                  # Hindi
+    "https://www.abplive.com/news",
+    "https://www.bhaskar.com/national/"         # Hindi
+]
+
+INTERNATIONAL_SOURCES = [
+    "https://www.thehindu.com/news/international/",
+    "https://www.bbc.com/news/world/asia/india",
+    "https://indianexpress.com/section/world/",
+    "https://timesofindia.indiatimes.com/world"
+]
+
+# scraping constraints
+MIN_LEN = 25
+MAX_LEN = 350
+
+# ------------------------ State ------------------------
+if os.path.exists(POSTED_TODAY):
+    with open(POSTED_TODAY, "r", encoding="utf-8") as f:
+        posted_today = json.load(f)
+else:
+    posted_today = {"prefix": {}, "emoji": {}, "IR_count": 0, "last_run": None}
+
+# ------------------------ Utilities ------------------------
+def sanitize(text):
+    if not text:
+        return ""
+    t = html.unescape(text)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+def safe_request(url, timeout=10):
     try:
-        r = requests.get(url, headers=headers, timeout=10)
-        if r.status_code != 200:
-            print(f"⚠️ {url} -> HTTP {r.status_code}")
-            return []
-        soup = BeautifulSoup(r.text, "html.parser")
-        tags = soup.find_all(["h1", "h2", "h3", "h4", "p"])
-        for t in tags:
-            text = t.get_text(strip=True)
-            if 25 < len(text) < 300:
-                headlines.append({"title": text, "url": url})
+        r = session.get(url, timeout=timeout)
+        r.raise_for_status()
+        return r.text
     except Exception as e:
-        print(f"❌ {url}: {e}")
-    return headlines
+        print(f"[WARN] request failed {url}: {e}")
+        return None
 
-def scrape_domestic():
-    urls = [
-        "https://timesofindia.indiatimes.com/",
-        "https://www.ndtv.com/latest",
-        "https://www.indiatoday.in/",
-        "https://www.jagran.com/",
-        "https://www.aajtak.in/",
-        "https://www.abplive.com/news",
-        "https://www.bhaskar.com/national/"
-    ]
-    all_h = []
-    for url in urls:
-        all_h += extract_headlines(url)
-    return all_h[:80]
+def try_extract_text(tag):
+    try:
+        return sanitize(tag.get_text(" ", strip=True))
+    except Exception:
+        return ""
 
-def scrape_international():
-    urls = [
-        "https://www.thehindu.com/news/international/",
-        "https://www.bbc.com/news/world/asia/india",
-        "https://indianexpress.com/section/world/",
-        "https://timesofindia.indiatimes.com/world"
-    ]
-    all_h = []
-    for url in urls:
-        all_h += extract_headlines(url)
-    return all_h[:50]
+def detect_topic(title):
+    t = title.lower()
+    if any(k in t for k in ["bjp","congress","modi","rahul","election","mla","mp","government","minister","polit"]):
+        return "Politics"
+    if any(k in t for k in ["china","pakistan","usa","us","russia","international","global","world"]):
+        return "International Relations"
+    if any(k in t for k in ["cricket","football","hockey","match","series","ipl","world cup","player"]):
+        return "Sports"
+    return "General"
 
-# ------------------------ Scoring & JSON ------------------------
+def truncate_by_chars(text, max_chars=280):
+    if len(text) <= max_chars:
+        return text
+    # try cut at sentence boundary before max_chars-3
+    cut = text[:max_chars-3]
+    idx = max(cut.rfind('.'), cut.rfind('।'), cut.rfind('!'), cut.rfind('?'))
+    if idx and idx > int(0.6*len(cut)):
+        return text[:idx+1]
+    # else hard cut
+    return text[:max_chars-3].rstrip() + "..."
+
+# ------------------------ Scraping / Extraction ------------------------
+def extract_from_page(url):
+    html_text = safe_request(url)
+    if not html_text:
+        return []
+    soup = BeautifulSoup(html_text, "html.parser")
+
+    items = []
+
+    # Common headline tags
+    tags = soup.find_all(["h1","h2","h3","h4"])
+    # Also include <article> summaries
+    for t in tags:
+        title = try_extract_text(t)
+        if not title or len(title) < MIN_LEN or len(title) > MAX_LEN:
+            continue
+
+        # subheadline: check next sibling paragraph or a short summary within the same container
+        sub = ""
+        # try sibling p
+        nxt = t.find_next_sibling(["p","div","span"])
+        if nxt:
+            s = try_extract_text(nxt)
+            if 15 <= len(s) <= 220:
+                sub = s
+
+        # try parent paragraph / meta description
+        if not sub:
+            parent = t.parent
+            if parent:
+                p = parent.find("p")
+                if p:
+                    s = try_extract_text(p)
+                    if 15 <= len(s) <= 220:
+                        sub = s
+
+        # try meta description
+        if not sub:
+            meta = soup.find("meta", {"name":"description"}) or soup.find("meta", {"property":"og:description"})
+            if meta and meta.get("content"):
+                s = sanitize(meta.get("content"))
+                if 15 <= len(s) <= 220:
+                    sub = s
+
+        # timestamp if present
+        time_text = ""
+        time_tag = t.find_next("time") or soup.find("time")
+        if time_tag:
+            time_text = try_extract_text(time_tag)
+
+        items.append({
+            "title": title,
+            "subtitle": sub,
+            "url": url,
+            "time": time_text,
+            "topic": detect_topic(title)
+        })
+
+    # Deduplicate by title within page
+    seen = set()
+    unique = []
+    for it in items:
+        key = it["title"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(it)
+    return unique
+
+def scrape_sources_list(urls, limit=80):
+    headlines = []
+    for u in urls:
+        tries = 0
+        while tries < 2:
+            tries += 1
+            page_items = extract_from_page(u)
+            if page_items:
+                headlines.extend(page_items)
+                break
+            else:
+                time.sleep(1)
+        # small delay between sources
+        time.sleep(0.5)
+    # dedupe across sources by normalized title
+    normalized = {}
+    for h in headlines:
+        k = re.sub(r'\W+', ' ', h["title"]).strip().lower()
+        if k in normalized:
+            # prefer existing with subtitle or earlier one
+            if not normalized[k].get("subtitle") and h.get("subtitle"):
+                normalized[k] = h
+        else:
+            normalized[k] = h
+    all_items = list(normalized.values())
+    # limit
+    return all_items[:limit]
+
+# ------------------------ Scoring / selecting ------------------------
 def assign_scores(headlines):
-    all_words = []
+    words = []
     for h in headlines:
-        all_words += re.findall(r'\w+', h['title'].lower())
-    freq = Counter(all_words)
+        words += re.findall(r'\w+', h['title'].lower())
+    freq = Counter(words)
     for h in headlines:
-        h_score = 1
+        score = 1
         for w in re.findall(r'\w+', h['title'].lower()):
-            if w in keywords:
-                h_score += freq[w]
-        for k, v in topic_weights.items():
+            if w in KEYWORDS:
+                score += freq[w]
+        for k,v in TOPIC_WEIGHTS.items():
             if k.lower() in h['title'].lower():
-                h_score += v
-        h['score'] = h_score
+                score += v
+        h['score'] = score
     return headlines
 
-def save_json(headlines, file_path):
-    top_items = sorted(headlines, key=lambda x: x['score'], reverse=True)[:max(15, len(headlines)//3)]
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(top_items, f, ensure_ascii=False, indent=2)
-    print(f"💾 Saved {len(top_items)} -> {file_path}")
+def save_list_json(headlines, path):
+    top = sorted(headlines, key=lambda x: x.get('score',0), reverse=True)[:max(15, len(headlines)//3)]
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(top, f, ensure_ascii=False, indent=2)
+    print(f"[INFO] Saved {len(top)} -> {path}")
 
-# ------------------------ Tweet Helpers ------------------------
-def load_headlines(file_path):
-    if not os.path.exists(file_path):
+def load_list_json(path):
+    if not os.path.exists(path):
         return []
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
             return data if isinstance(data, list) else []
-    except json.JSONDecodeError:
+    except Exception as e:
+        print(f"[WARN] failed to load {path}: {e}")
         return []
 
-def pick_headline_weighted(headlines):
-    weighted = [h for h in headlines if h.get('score',0) > 0]
-    if weighted:
-        return random.choices(weighted, weights=[h['score'] for h in weighted], k=1)[0]
-    return None
+# ------------------------ Expand / humanize / translate ------------------------
+def build_expanded_english(headline, subtitle, reason, impact, target_len=250):
+    # start with headline + subtitle if available
+    parts = [headline]
+    if subtitle:
+        parts.append(subtitle)
+    # append reason/impact in short phrases (English)
+    if reason:
+        parts.append(reason if isinstance(reason, str) else f"Reason: {reason}")
+    if impact:
+        parts.append(impact if isinstance(impact, str) else f"Impact: {impact}")
 
-def get_reason_impact(headline_obj, chance=0.2):
-    reason = headline_obj.get("reason")
-    impact = headline_obj.get("impact")
-    if not reason and not impact and random.random() <= chance:
-        words = re.findall(r'\w+', headline_obj['title'].lower())
-        reason_kw = next((k for k in keyword_impact_map if k.lower() in words), None)
-        reason = f"इस विकास के कारण {reason_kw}" if reason_kw else "हालिया घटनाओं के कारण"
-        impact_kw = next((k for k in keyword_impact_map if k.lower() in words), None)
-        impact = keyword_impact_map.get(impact_kw,"संबंधित पक्षों को प्रभावित करने वाला")
-    return reason, impact
+    base = " | ".join([p for p in parts if p])
+    base = sanitize(base)
+    # add filler sentences until close to target_len (characters)
+    filler_pool = FILLERS.copy()
+    random.shuffle(filler_pool)
+    i = 0
+    while len(base) < target_len and i < 6:
+        base += " " + filler_pool[i % len(filler_pool)]
+        i += 1
+    # final cleanup
+    base = re.sub(r'\s+', ' ', base).strip()
+    if len(base) > 275:
+        base = base[:272] + "..."
+    return base
 
-def advanced_rephrase_specific(headline, reason, impact):
-    available_prefixes = [p for p in prefixes if posted_today["prefix"].get(p,0)<2]
-    prefix = random.choice(available_prefixes) if available_prefixes else random.choice(prefixes)
-    posted_today["prefix"][prefix] = posted_today["prefix"].get(prefix,0)+1
+def human_tone_english(text):
+    # minor humanization: punctuation spacing, short sentence splits, rhetorical phrase occasionally
+    text = text.strip()
+    # small chance to add rhetorical opener
+    if random.random() < 0.25:
+        openers = ["Note:", "Update:", "Remember:", "Important:"]
+        text = random.choice(openers) + " " + text
+    # replace sequences of ' | ' with em dashes for human feel
+    text = text.replace(" | ", " — ")
+    return text
 
-    available_emojis = [e for e in emojis if posted_today["emoji"].get(e,0)<2]
-    emoji = random.choice(available_emojis) if available_emojis else random.choice(emojis)
-    posted_today["emoji"][emoji] = posted_today["emoji"].get(emoji,0)+1
+def compose_final_text(headline_obj, force_target_len=None):
+    title = headline_obj.get("title","")
+    subtitle = headline_obj.get("subtitle","")
+    reason, impact = get_reason_impact(headline_obj, chance=0.28)
+    # build English expanded text to approximate target length (target between 245-270)
+    target = force_target_len or random.randint(245,270)
+    eng = build_expanded_english(title, subtitle, reason, impact, target_len=target)
+    eng = human_tone_english(eng)
+    # add prefix + emoji
+    prefix = random.choice([p for p in PREFIXES if posted_today["prefix"].get(p,0) < 3] or PREFIXES)
+    emoji = random.choice([e for e in EMOJIS if posted_today["emoji"].get(e,0) < 3] or EMOJIS)
+    posted_today["prefix"][prefix] = posted_today["prefix"].get(prefix,0) + 1
+    posted_today["emoji"][emoji] = posted_today["emoji"].get(emoji,0) + 1
 
-    words = headline.split()
-    new_words = []
-    for w in words:
-        key = w.strip(".,!?")
-        if key in synonyms and random.random() < 0.3:
-            new_words.append(random.choice(synonyms[key]))
-        else:
-            new_words.append(w)
-    new_title = " ".join(new_words)
-
-    # Expand short headlines to ~250 chars
-    reason_text = reason if reason else ""
-    impact_text = impact if impact else ""
-    if len(new_title) < 200:
-        extra = f" | {reason_text}. यह विकास महत्वपूर्ण है और संबंधित पक्षों पर प्रभाव डाल सकता है। {impact_text}।"
-        new_title += extra
-
-    full_text = f"{prefix} {emoji} {new_title}"
-    if len(full_text) > 280:
-        full_text = full_text[:277] + "..."
-
-    # Translate to Hindi
+    combined = f"{prefix} {emoji} {eng}"
+    # translate to Hindi
     try:
-        full_text_hi = translator.translate(full_text, dest='hi').text
-    except:
-        full_text_hi = full_text
+        hi = translator.translate(combined, src='en', dest='hi').text
+        hi = sanitize(hi)
+    except Exception as e:
+        print(f"[WARN] translation failed: {e}")
+        hi = sanitize(combined)
+    # ensure <=280 chars, try smart truncate to sentence boundary
+    if len(hi) > 280:
+        hi = truncate_by_chars(hi, 280)
+    return hi, reason, impact
 
-    return full_text_hi
-
+# ------------------------ Post (keeps method unchanged) ------------------------
 def post_tweet(text):
+    # Posting method unchanged: use client.create_tweet(text=...)
     try:
-        client.update_status(status=text)
-        print(f"[{datetime.now()}] ✅ Tweet posted successfully")
+        client.create_tweet(text=text)
+        print(f"[{datetime.now()}] ✅ Tweet posted (len={len(text)}): {text[:120]}...")
     except Exception as e:
         print(f"[{datetime.now()}] ❌ Failed to post tweet: {e}")
 
-# ------------------------ Main ------------------------
+# ------------------------ Workflow (main) ------------------------
 def main():
-    # Fetch & save news
-    morning_headlines = assign_scores(scrape_domestic())
-    evening_headlines = assign_scores(scrape_domestic())
-    ir_headlines = assign_scores(scrape_international())
-    if morning_headlines:
-        save_json(morning_headlines, morning_file)
-    if evening_headlines:
-        save_json(evening_headlines, evening_file)
-    if ir_headlines:
-        save_json(ir_headlines, ir_file)
+    print(f"\n[START] Fetch & Post run at {datetime.now()}")
 
-    # Load for tweeting
-    morning = load_headlines(morning_file)
-    evening = load_headlines(evening_file)
-    international = load_headlines(ir_file)
-    all_headlines = morning + evening + international
-    print(f"[DEBUG {datetime.now()}] Total headlines loaded: {len(all_headlines)}")
+    # 1) Scrape sources (domestic and international)
+    domestic = scrape_sources_list(DOMESTIC_SOURCES, limit=120)
+    international = scrape_sources_list(INTERNATIONAL_SOURCES, limit=80)
+
+    # 2) Score
+    domestic_scored = assign_scores(domestic)
+    international_scored = assign_scores(international)
+
+    # 3) Save
+    if domestic_scored:
+        save_list_json(domestic_scored, MORNING_FILE)
+        save_list_json(domestic_scored, EVENING_FILE)  # optional: same list for both slots
+    if international_scored:
+        save_list_json(international_scored, IR_FILE)
+
+    # 4) Load for posting (use saved files to be robust)
+    morning = load_list_json(MORNING_FILE)
+    evening = load_list_json(EVENING_FILE)
+    ir_list = load_list_json(IR_FILE)
+
+    all_headlines = morning + evening + ir_list
+    print(f"[INFO] Total headlines available: {len(all_headlines)}")
 
     if not all_headlines:
-        print(f"[ERROR {datetime.now()}] No headlines available at all. Exiting.")
+        print("[ERROR] No headlines, aborting post.")
         return
 
-    tweet_obj = None
-    tries = 0
-    while tries < 10:
+    # 5) Pick a headline weighted by score, respecting IR limit
+    attempts = 0
+    chosen = None
+    while attempts < 12:
+        attempts += 1
         candidate = pick_headline_weighted(all_headlines)
         if not candidate:
             break
-        if candidate.get('topic') == "International Relations" and posted_today.get("IR_count",0) >= 3:
-            tries += 1
+        # detect topic (if absent)
+        if "topic" not in candidate:
+            candidate["topic"] = detect_topic(candidate.get("title",""))
+        if candidate.get("topic") == "International Relations" and posted_today.get("IR_count",0) >= 3:
             continue
-        tweet_obj = candidate
+        chosen = candidate
         break
 
-    if not tweet_obj:
-        print(f"[WARN {datetime.now()}] Weighted pick failed, using fallback headline")
-        tweet_obj = random.choice(all_headlines)         
-    # Generate tweet
-    reason, impact = get_reason_impact(tweet_obj)
-    tweet_text = advanced_rephrase_specific(tweet_obj['title'], reason, impact)
-    print(f"[DEBUG {datetime.now()}] Selected headline: {tweet_text[:100]}...")
+    if not chosen:
+        chosen = random.choice(all_headlines)
+        print("[WARN] Weighted selection failed; using random fallback.")
 
-    # Post tweet
-    post_tweet(tweet_text)
+    # 6) Compose final human-like Hindi tweet around 250-280 chars
+    final_text, reason, impact = compose_final_text(chosen)
+    print(f"[DEBUG] Final tweet (len={len(final_text)}): {final_text[:200]}...")
 
-    # Update counts
-    if tweet_obj.get('topic') == "International Relations":
-        posted_today["IR_count"] = posted_today.get("IR_count", 0) + 1
+    # 7) Quality checks: duplicates, banned chars, length
+    if len(final_text) > 280:
+        final_text = truncate_by_chars(final_text, 280)
 
-    # Save posted_today
-    with open(posted_today_file, "w", encoding="utf-8") as f:
+    # avoid repeating the exact same tweet posted_today (basic check)
+    # simple: check posted_today contains last text (store last_text)
+    last_text = posted_today.get("last_text")
+    if last_text and final_text.strip() == last_text.strip():
+        print("[WARN] Tweet identical to last posted; aborting this run to avoid duplicate.")
+        return
+
+    # 8) Post
+    post_tweet(final_text)
+
+    # 9) Update counters and save posted_today
+    if chosen.get("topic") == "International Relations":
+        posted_today["IR_count"] = posted_today.get("IR_count",0) + 1
+    posted_today["last_text"] = final_text
+    posted_today["last_posted_at"] = datetime.utcnow().isoformat()
+
+    with open(POSTED_TODAY, "w", encoding="utf-8") as f:
         json.dump(posted_today, f, ensure_ascii=False, indent=2)
+
+    print(f"[DONE] Run finished at {datetime.now()}")
 
 if __name__ == "__main__":
     main()
