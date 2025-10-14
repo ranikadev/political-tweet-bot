@@ -2,10 +2,9 @@ name: Auto News Bot
 
 on:
   schedule:
-    # GitHub Actions uses UTC time (IST = UTC + 5:30)
-    # So 9 AM–1 AM IST → 03:30–19:30 UTC
-    # We'll trigger every ~4 hours to total 6 posts/day
-    - cron: "30 3,7,11,15,19,23 * * *"   # 9 AM, 1 PM, 5 PM, 9 PM, 1 AM, 5 AM IST equivalents
+    # 6 scheduled runs per day (approx every 4 hours) between 9 AM–1 AM IST
+    # 9 AM IST = 03:30 UTC; 1 AM IST = 19:30 UTC
+    - cron: "30 3,7,11,15,19,23 * * *"
   workflow_dispatch:
 
 jobs:
@@ -23,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: pip install requests tweepy
 
-      - name: Run bot with random delay
+      - name: Run bot
         env:
           PERPLEXITY_API: ${{ secrets.PERPLEXITY_API }}
           API_KEY: ${{ secrets.API_KEY }}
@@ -31,10 +30,16 @@ jobs:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
           ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
         run: |
-          echo "⏳ Adding random delay ±45 min..."
-          delay=$(( (RANDOM % 5400) - 2700 ))  # -2700 to +2700 seconds (±45 min)
-          if [ $delay -gt 0 ]; then
-            echo "Sleeping for $delay seconds..."
-            sleep $delay
+          # Detect if manually triggered or scheduled
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "🕒 Scheduled run detected: applying random ±45 min delay..."
+            delay=$(( (RANDOM % 5400) - 2700 ))  # -2700 to +2700 seconds
+            if [ $delay -gt 0 ]; then
+              echo "⏳ Sleeping for $delay seconds (~$((delay/60)) min)..."
+              sleep $delay
+            fi
+          else
+            echo "🚀 Manual trigger — skipping delay."
           fi
+
           python bot.py
