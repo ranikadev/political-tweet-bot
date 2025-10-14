@@ -1,0 +1,40 @@
+name: Auto News Bot
+
+on:
+  schedule:
+    # GitHub Actions uses UTC time (IST = UTC + 5:30)
+    # So 9 AM–1 AM IST → 03:30–19:30 UTC
+    # We'll trigger every ~4 hours to total 6 posts/day
+    - cron: "30 3,7,11,15,19,23 * * *"   # 9 AM, 1 PM, 5 PM, 9 PM, 1 AM, 5 AM IST equivalents
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests tweepy
+
+      - name: Run bot with random delay
+        env:
+          PERPLEXITY_API: ${{ secrets.PERPLEXITY_API }}
+          API_KEY: ${{ secrets.API_KEY }}
+          API_SECRET: ${{ secrets.API_SECRET }}
+          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
+        run: |
+          echo "⏳ Adding random delay ±45 min..."
+          delay=$(( (RANDOM % 5400) - 2700 ))  # -2700 to +2700 seconds (±45 min)
+          if [ $delay -gt 0 ]; then
+            echo "Sleeping for $delay seconds..."
+            sleep $delay
+          fi
+          python bot.py
