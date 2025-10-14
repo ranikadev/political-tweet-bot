@@ -96,8 +96,4 @@ def main():
     post_tweet(final_text)
 
 if __name__ == "__main__":
-    # Random delay to simulate +/-30 min
-    delay = random.randint(0, 1800)
-    print(f"⏳ Sleeping for {delay/60:.1f} min before run...")
-    time.sleep(delay)
     main()
