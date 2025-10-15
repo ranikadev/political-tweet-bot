@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import sys  
 
 # ---------------- Environment Variables ----------------  
-PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")  
+PERPLEXITY_API = os.getenv("PERPLEXITY_API")  
 API_KEY = os.getenv("API_KEY")  
 API_SECRET = os.getenv("API_SECRET")  
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")  
