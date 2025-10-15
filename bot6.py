@@ -120,7 +120,7 @@ def cleanup_posted(days=5):
 
 def post_tweet(text):  
     global DRY_RUN  
-    if not DRY_RUN and (TWITTER_API_KEY is None or TWITTER_API_SECRET is None or TWITTER_ACCESS_TOKEN is None or TWITTER_ACCESS_SECRET is None):  
+    if not DRY_RUN and (API_KEY is None or API_SECRET is None or ACCESS_TOKEN is None or ACCESS_SECRET is None):  
         print("❌ Twitter env vars missing!")  
         return False  
     print(f"[{datetime.now()}] 🔄 Attempting to post ({len(text)} chars): {text[:50]}...")  
