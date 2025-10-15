@@ -42,4 +42,4 @@ jobs:
             echo "🚀 Manual trigger — skipping delay."
           fi
 
-          python bot.py
+          python bot6.py
