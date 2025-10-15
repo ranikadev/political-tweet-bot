@@ -51,7 +51,7 @@ DRY_RUN = False  # Set True for manual (no tweet)
 def fetch_news(prompt):  
     url = "https://api.perplexity.ai/chat/completions"  
     headers = {  
-        "Authorization": f"Bearer {PERPLEXITY_API_KEY}",  
+        "Authorization": f"Bearer {PERPLEXITY_API}",  
         "Content-Type": "application/json"  
     }  
     data = {  
