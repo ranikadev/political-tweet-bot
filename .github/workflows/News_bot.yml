@@ -2,9 +2,9 @@ name: Auto News Bot
 
 on:
   schedule:
-    # 6 scheduled runs per day (approx every 4 hours) between 9 AM–1 AM IST
-    # 9 AM IST = 03:30 UTC; 1 AM IST = 19:30 UTC
-    - cron: "30 3,7,11,15,19,23 * * *"
+    # 10 scheduled runs per day between 9:30 AM – 12:30 AM IST
+    # 9:30 AM IST = 03:00 UTC; 12:30 AM IST (next day) = 19:00 UTC
+    - cron: "0 3,5,7,9,11,13,15,17,19,21 * * *"  # 10 runs
   workflow_dispatch:
 
 jobs:
@@ -32,8 +32,8 @@ jobs:
         run: |
           # Detect if manually triggered or scheduled
           if [ "${{ github.event_name }}" = "schedule" ]; then
-            echo "🕒 Scheduled run detected: applying random ±45 min delay..."
-            delay=$(( (RANDOM % 5400) - 2700 ))  # -2700 to +2700 seconds
+            echo "🕒 Scheduled run detected: applying random ±30 min delay..."
+            delay=$(( (RANDOM % 3600) - 1800 ))  # -1800 to +1800 seconds
             if [ $delay -gt 0 ]; then
               echo "⏳ Sleeping for $delay seconds (~$((delay/60)) min)..."
               sleep $delay
