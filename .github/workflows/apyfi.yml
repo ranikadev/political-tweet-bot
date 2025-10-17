@@ -24,6 +24,11 @@ on:
     - cron: "40 17 * * *" # 23:10 IST
 
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Mode to run (fetch or reply)"
+        required: false
+        default: fetch
 
 jobs:
   run-bot:
@@ -39,11 +44,9 @@ jobs:
       - name: Install dependencies
         run: pip install tweepy apify-client requests pytz
 
-      # ---------------- Fetch Mode ----------------
       - name: Run Fetch
-        if: |
-          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'fetch' ||
-          github.event_name == 'schedule' && contains('0 6,0 9,0 12,0 13,0 17', github.event.schedule)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'fetch' ||
+            github.event_name == 'schedule' && startsWith(github.event.schedule, '0 ')
         env:
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
           PERPLEXITY_API: ${{ secrets.PERPLEXITY_API }}
@@ -54,11 +57,9 @@ jobs:
           MODE: fetch
         run: python apyfi.py
 
-      # ---------------- Reply Mode ----------------
       - name: Run Reply
-        if: |
-          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'reply' ||
-          github.event_name == 'schedule' && contains('20 6,20 9,20 12,20 13,20 17,40 6,40 9,40 12,40 13,40 17', github.event.schedule)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'reply' ||
+            github.event_name == 'schedule' && (startsWith(github.event.schedule, '20 ') || startsWith(github.event.schedule, '40 '))
         env:
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
           PERPLEXITY_API: ${{ secrets.PERPLEXITY_API }}
