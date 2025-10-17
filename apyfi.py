@@ -10,12 +10,12 @@ import tweepy
 
 # ---------------- Config ----------------
 APIFY_TOKEN = os.getenv("APIFY_API_TOKEN")
-PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
-TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
-TWITTER_API_KEY = os.getenv("TWITTER_API_KEY")
-TWITTER_API_SECRET = os.getenv("TWITTER_API_SECRET")
-TWITTER_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
-TWITTER_ACCESS_SECRET = os.getenv("TWITTER_ACCESS_SECRET")
+PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API")          # Perplexity secret
+TWITTER_API_KEY = os.getenv("API_KEY")                    # Twitter API key
+TWITTER_API_SECRET = os.getenv("API_SECRET")              # Twitter API secret
+TWITTER_ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")          # Twitter access token
+TWITTER_ACCESS_SECRET = os.getenv("ACCESS_SECRET")        # Twitter access secret
+TWITTER_BEARER_TOKEN = os.getenv("ACCESS_TOKEN")          # Using access token as bearer (or separate if available)
 
 MODE = "fetch"  # "fetch" or "reply"
 
@@ -99,7 +99,7 @@ def fetch_tweets(profiles):
         print("🔍 Raw item:", json.dumps(item, indent=2, ensure_ascii=False))
 
         profile = item.get("profileUrl")
-        text = item.get("postText") or item.get("text") or ""  # ✅ safe key
+        text = item.get("postText") or item.get("text") or ""  # ✅ safe key usage
         if not text:
             continue
         if profile not in all_tweets:
@@ -115,6 +115,9 @@ def fetch_tweets(profiles):
 def fetch_perplexity_analysis(tweet_text):
     if not tweet_text:
         print("⚠️ No tweet text provided to Perplexity.")
+        return ""
+    if not PERPLEXITY_API_KEY:
+        print("❌ Invalid or missing Perplexity key — check environment variable PERPLEXITY_API")
         return ""
     trimmed_text = tweet_text[:500]
     prompt = f"Give me a concise critical political analysis on this tweet: '{trimmed_text}', in less than 260 words."
