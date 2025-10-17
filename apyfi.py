@@ -17,7 +17,7 @@ TWITTER_ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")          # Twitter access token
 TWITTER_ACCESS_SECRET = os.getenv("ACCESS_SECRET")        # Twitter access secret
 TWITTER_BEARER_TOKEN = os.getenv("ACCESS_TOKEN")          # Using access token as bearer (or separate if available)
 
-MODE = "fetch"  # "fetch" or "reply"
+MODE = os.environ.get("MODE", "fetch")  # Default to fetch if not set
 
 # ---------------- Files ----------------
 PROFILES_FILE = "profiles.txt"
