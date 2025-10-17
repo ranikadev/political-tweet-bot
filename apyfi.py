@@ -94,9 +94,12 @@ def fetch_tweets(profiles):
     print(f"Fetching {TWEETS_PER_PROFILE} tweet(s) from {len(profiles)} profiles ...")
     run = apify_client.actor(ACTOR_ID).call(run_input=run_input)
     all_tweets = {}
+
     for item in apify_client.dataset(run["defaultDatasetId"]).iterate_items():
-    print("🔍 Raw item:", json.dumps(item, indent=2, ensure_ascii=False))  # ADD THIS LINE
-    profile = item.get("profileUrl")
+        # 👇 DEBUG PRINT (4 spaces of indentation)
+        print("🔍 Raw item:", json.dumps(item, indent=2, ensure_ascii=False))
+
+        profile = item.get("profileUrl")
         if not item.get("text"):
             continue
         if profile not in all_tweets:
