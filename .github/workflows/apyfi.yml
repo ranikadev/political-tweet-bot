@@ -55,7 +55,7 @@ jobs:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
           ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
           MODE: fetch
-        run: python apyfi.py
+        run: python apyfi1.py
 
       - name: Run Reply
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'reply' ||
@@ -68,4 +68,4 @@ jobs:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
           ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
           MODE: reply
-        run: python apyfi.py
+        run: python apyfi1.py
