@@ -2,12 +2,27 @@ name: Twitter Bot Scheduler
 
 on:
   schedule:
-    # Step 1 - Fetch new tweets + first reply
-    - cron: "30 3,7,11,15 * * *"   # 9:00, 13:00, 17:00, 21:00 IST
-    # Step 2 - Reply #1 (20 mins later)
-    - cron: "50 3,7,11,15 * * *"
-    # Step 3 - Reply #2 (40 mins later)
-    - cron: "10 4,8,12,16 * * *"
+    # ---------------- Fetch ----------------
+    - cron: "0 6 * * *"   # 11:30 IST
+    - cron: "0 9 * * *"   # 14:30 IST
+    - cron: "0 12 * * *"  # 17:30 IST
+    - cron: "0 13 * * *"  # 18:30 IST
+    - cron: "0 17 * * *"  # 22:30 IST
+
+    # ---------------- Reply #1 (+20 min) ----------------
+    - cron: "20 6 * * *"  # 11:50 IST
+    - cron: "20 9 * * *"  # 14:50 IST
+    - cron: "20 12 * * *" # 17:50 IST
+    - cron: "20 13 * * *" # 18:50 IST
+    - cron: "20 17 * * *" # 22:50 IST
+
+    # ---------------- Reply #2 (+40 min) ----------------
+    - cron: "40 6 * * *"  # 12:10 IST
+    - cron: "40 9 * * *"  # 15:10 IST
+    - cron: "40 12 * * *" # 18:10 IST
+    - cron: "40 13 * * *" # 19:10 IST
+    - cron: "40 17 * * *" # 23:10 IST
+
   workflow_dispatch:
 
 jobs:
@@ -22,10 +37,13 @@ jobs:
           python-version: 3.11
 
       - name: Install dependencies
-        run: pip install tweepy apify-client requests
+        run: pip install tweepy apify-client requests pytz
 
-      - name: Run bot - Fetch
-        if: github.event_name == 'schedule' && (github.event.schedule == '30 3,7,11,15 * * *')
+      # ---------------- Fetch Mode ----------------
+      - name: Run Fetch
+        if: |
+          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'fetch' ||
+          github.event_name == 'schedule' && contains('0 6,0 9,0 12,0 13,0 17', github.event.schedule)
         env:
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
           PERPLEXITY_API: ${{ secrets.PERPLEXITY_API }}
@@ -36,8 +54,11 @@ jobs:
           MODE: fetch
         run: python apyfi.py
 
-      - name: Run bot - Reply
-        if: github.event_name == 'schedule' && (github.event.schedule != '30 3,7,11,15 * * *')
+      # ---------------- Reply Mode ----------------
+      - name: Run Reply
+        if: |
+          github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'reply' ||
+          github.event_name == 'schedule' && contains('20 6,20 9,20 12,20 13,20 17,40 6,40 9,40 12,40 13,40 17', github.event.schedule)
         env:
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
           PERPLEXITY_API: ${{ secrets.PERPLEXITY_API }}
