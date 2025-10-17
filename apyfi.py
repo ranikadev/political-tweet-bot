@@ -17,7 +17,7 @@ TWITTER_API_SECRET = os.getenv("TWITTER_API_SECRET")
 TWITTER_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
 TWITTER_ACCESS_SECRET = os.getenv("TWITTER_ACCESS_SECRET")
 
-MODE = os.getenv("MODE", "fetch")  # "fetch" or "reply"
+MODE = "fetch" # "fetch" or "reply"
 
 # ---------------- Files ----------------
 PROFILES_FILE = "profiles.txt"
