@@ -17,7 +17,7 @@ TWITTER_API_SECRET = os.getenv("TWITTER_API_SECRET")
 TWITTER_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
 TWITTER_ACCESS_SECRET = os.getenv("TWITTER_ACCESS_SECRET")
 
-MODE = "fetch" # "fetch" or "reply"
+MODE = "fetch"  # "fetch" or "reply"
 
 # ---------------- Files ----------------
 PROFILES_FILE = "profiles.txt"
@@ -96,18 +96,18 @@ def fetch_tweets(profiles):
     all_tweets = {}
 
     for item in apify_client.dataset(run["defaultDatasetId"]).iterate_items():
-        # 👇 DEBUG PRINT (4 spaces of indentation)
         print("🔍 Raw item:", json.dumps(item, indent=2, ensure_ascii=False))
 
         profile = item.get("profileUrl")
-        if not item.get("text"):
+        text = item.get("postText") or item.get("text") or ""  # ✅ safe key
+        if not text:
             continue
         if profile not in all_tweets:
             all_tweets[profile] = []
         if len(all_tweets[profile]) < TWEETS_PER_PROFILE:
             all_tweets[profile].append({
                 "id": item.get("postId"),
-                "text": item.get("text", "")
+                "text": text
             })
     return all_tweets
 
