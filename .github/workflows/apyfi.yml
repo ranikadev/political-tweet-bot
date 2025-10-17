@@ -24,14 +24,26 @@ jobs:
       - name: Install dependencies
         run: pip install tweepy apify-client requests
 
-      - name: Run bot
+      - name: Run bot - Fetch
+        if: github.event_name == 'schedule' && (github.event.schedule == '30 3,7,11,15 * * *')
         env:
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
-          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
-          TWITTER_BEARER_TOKEN: ${{ secrets.TWITTER_BEARER_TOKEN }}
-          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
-          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
-          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
-          TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
-          MODE: ${{ github.event.schedule == '30 3,7,11,15 * * *' && 'fetch' || 'reply' }}
+          PERPLEXITY_API: ${{ secrets.PERPLEXITY_API }}
+          API_KEY: ${{ secrets.API_KEY }}
+          API_SECRET: ${{ secrets.API_SECRET }}
+          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
+          MODE: fetch
+        run: python apyfi.py
+
+      - name: Run bot - Reply
+        if: github.event_name == 'schedule' && (github.event.schedule != '30 3,7,11,15 * * *')
+        env:
+          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+          PERPLEXITY_API: ${{ secrets.PERPLEXITY_API }}
+          API_KEY: ${{ secrets.API_KEY }}
+          API_SECRET: ${{ secrets.API_SECRET }}
+          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
+          MODE: reply
         run: python apyfi.py
