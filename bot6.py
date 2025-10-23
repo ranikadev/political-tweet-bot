@@ -22,18 +22,13 @@ LAST_CATEGORY_FILE = "last_category.txt"
 CATEGORIES = [
     "Politics & Governance",
     "Economy & Finance",
-    "Technology & Innovation",
-    "Science & Environment",
     "Sports & Events",
-    "Entertainment & Celebrities",
-    "Health & Wellness",
-    "Education & Career",
     "Crime & Law & Order",
     "Social Issues & Human Interest Stories"
 ]
 
 def get_prompt(category):
-    return f"Give today's controversy news regarding '{category}', exactly in 260 characters, in Hindi."
+    return f"Give today's most controversy news regarding '{category}', exactly in 260 characters, in Hinglish, only news ( no mention of word count or date , headline, source etc.) just news."
 
 # ---------------- Twitter Setup ----------------  
 client = tweepy.Client(  
