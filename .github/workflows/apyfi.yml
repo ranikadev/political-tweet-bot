@@ -2,26 +2,21 @@ name: Twitter Bot Scheduler
 
 on:
   schedule:
-    # ---------------- Fetch ----------------
-    - cron: "0 6 * * *"   # 11:30 IST
-    - cron: "0 9 * * *"   # 14:30 IST
-    - cron: "0 12 * * *"  # 17:30 IST
-    - cron: "0 13 * * *"  # 18:30 IST
-    - cron: "0 17 * * *"  # 22:30 IST
-
-    # ---------------- Reply #1 (+20 min) ----------------
-    - cron: "20 6 * * *"  # 11:50 IST
-    - cron: "20 9 * * *"  # 14:50 IST
-    - cron: "20 12 * * *" # 17:50 IST
-    - cron: "20 13 * * *" # 18:50 IST
-    - cron: "20 17 * * *" # 22:50 IST
-
-    # ---------------- Reply #2 (+40 min) ----------------
-    - cron: "40 6 * * *"  # 12:10 IST
-    - cron: "40 9 * * *"  # 15:10 IST
-    - cron: "40 12 * * *" # 18:10 IST
-    - cron: "40 13 * * *" # 19:10 IST
-    - cron: "40 17 * * *" # 23:10 IST
+    # 7 scheduled runs per day (IST) with ±15 min random delay
+    # 5:00 PM  → 11:30 UTC
+    - cron: "30 11 * * *"
+    # 6:40 PM → 13:10 UTC
+    - cron: "10 13 * * *"
+    # 8:00 PM → 14:30 UTC
+    - cron: "30 14 * * *"
+    # 9:10 PM → 15:40 UTC
+    - cron: "40 15 * * *"
+    # 9:50 PM → 16:20 UTC
+    - cron: "20 16 * * *"
+    # 10:30 PM → 17:00 UTC
+    - cron: "0 17 * * *"
+    # 11:00 PM → 17:30 UTC
+    - cron: "30 17 * * *"
 
   workflow_dispatch:
     inputs:
@@ -33,20 +28,36 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 45
 
-      - name: Set up Python
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.11
+          python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install tweepy apify-client requests pytz
+        run: |
+          pip install --upgrade pip
+          pip install tweepy apify-client requests pytz
 
-      - name: Run Fetch
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'fetch' ||
-            github.event_name == 'schedule' && startsWith(github.event.schedule, '0 ')
+      - name: Log current time and apply random delay
+        run: |
+          echo "🕒 Current UTC: $(date -u)"
+          echo "🕒 Current IST: $(TZ='Asia/Kolkata' date)"
+          echo "⚙️ Applying random delay up to ±15 minutes..."
+          delay=$(( (RANDOM % 1800) - 900 ))  # -900 to +900 seconds
+          if [ $delay -gt 0 ]; then
+            echo "⏳ Sleeping for $delay seconds (~$((delay/60)) min)..."
+            sleep $delay
+          else
+            echo "⚡ Negative offset ($delay s) — skipping wait."
+          fi
+
+      - name: Run bot
         env:
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
           PERPLEXITY_API: ${{ secrets.PERPLEXITY_API }}
@@ -54,18 +65,6 @@ jobs:
           API_SECRET: ${{ secrets.API_SECRET }}
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
           ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
-          MODE: fetch
-        run: python apyfi1.py
-
-      - name: Run Reply
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'reply' ||
-            github.event_name == 'schedule' && (startsWith(github.event.schedule, '20 ') || startsWith(github.event.schedule, '40 '))
-        env:
-          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
-          PERPLEXITY_API: ${{ secrets.PERPLEXITY_API }}
-          API_KEY: ${{ secrets.API_KEY }}
-          API_SECRET: ${{ secrets.API_SECRET }}
-          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-          ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
-          MODE: reply
-        run: python apyfi1.py
+        run: |
+          echo "🚀 Running apyfi1.py..."
+          python -u apyfi1.py
