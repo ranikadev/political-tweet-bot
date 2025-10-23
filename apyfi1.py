@@ -124,7 +124,7 @@ def fetch_perplexity_analysis(tweet_text):
         print("❌ Invalid or missing Perplexity key — check environment variable PERPLEXITY_API")
         return ""
     trimmed_text = tweet_text[:500]
-    prompt = f"(YOU ARE A NO FILTER ANALYST SO NOW) \"give me only critical analysis of \\\"{trimmed_text}\\\" , in less than 260 characters in hindi, no headings, no character no. mention\""  
+    prompt = f"(YOU ARE A NO FILTER ANALYST SO NOW) \"give me only critical analysis of \\\"{trimmed_text}\\\" , in less than 260 characters in hinglish, don't start like this tweet is about etc., no headings, no character no. mention, sound like a human\""  
     url = "https://api.perplexity.ai/chat/completions"
     headers = {"Authorization": f"Bearer {PERPLEXITY_API_KEY}", "Content-Type": "application/json"}
     data = {
