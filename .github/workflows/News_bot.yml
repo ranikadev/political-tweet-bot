@@ -2,14 +2,21 @@ name: Auto News Bot
 
 on:
   schedule:
-    # 10 scheduled runs per day between 9:30 AM – 12:30 AM IST
-    # 9:30 AM IST = 03:00 UTC; 12:30 AM IST (next day) = 19:00 UTC
-    - cron: "0 3,5,7,9,11,13,15,17,19,21 * * *"  # 10 runs
+    # 6 scheduled runs per day (IST): 9:00 AM, 12:15 PM, 4:00 PM, 6:00 PM, 7:30 PM, 8:30 PM
+    # Corresponding UTC: 03:30, 06:45, 10:30, 12:30, 14:00, 15:00
+    - cron: "30 3 * * *"
+    - cron: "45 6 * * *"
+    - cron: "30 10 * * *"
+    - cron: "30 12 * * *"
+    - cron: "0 14 * * *"
+    - cron: "0 15 * * *"
   workflow_dispatch:
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -20,7 +27,9 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install requests tweepy
+        run: |
+          pip install --upgrade pip
+          pip install requests tweepy
 
       - name: Run bot
         env:
@@ -30,16 +39,20 @@ jobs:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
           ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
         run: |
-          # Detect if manually triggered or scheduled
+          echo "🕒 Current UTC: $(date -u)"
+          echo "🕒 Current IST: $(TZ='Asia/Kolkata' date)"
+
           if [ "${{ github.event_name }}" = "schedule" ]; then
-            echo "🕒 Scheduled run detected: applying random ±30 min delay..."
-            delay=$(( (RANDOM % 3600) - 1800 ))  # -1800 to +1800 seconds
+            echo "⏱ Scheduled run detected: applying random ±20 min delay..."
+            delay=$(( (RANDOM % 2400) - 1200 ))  # -1200 to +1200 seconds
             if [ $delay -gt 0 ]; then
               echo "⏳ Sleeping for $delay seconds (~$((delay/60)) min)..."
               sleep $delay
+            else
+              echo "⚡ Negative offset ($delay s) — skipping wait."
             fi
           else
             echo "🚀 Manual trigger — skipping delay."
           fi
 
-          python bot6.py
+          python -u bot6.py
