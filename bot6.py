@@ -22,9 +22,9 @@ LAST_CATEGORY_FILE = "last_category.txt"
 CATEGORIES = [
     "Politics & Governance",
     "Economy & Finance",
-    "Sports & Events",
-    "Crime & Law & Order",
-    "Social Issues & Human Interest Stories"
+    "indian Sports & Events",
+    "indian Crime & Law & Order",
+    "indian Social Issues "
 ]
 
 def get_prompt(category):
