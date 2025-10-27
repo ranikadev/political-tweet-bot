@@ -20,8 +20,9 @@ LAST_CATEGORY_FILE = "last_category.txt"
 
 # ---------------- Categories ----------------  
 CATEGORIES = [
-    "Politics & Governance",
-    "Economy & Finance",
+    "indian Politics",
+    "indian Governance",
+    "indian Economy & Finance",
     "indian Crime & Law & Order",
     "indian Social Issues "
     "india and it's international relations"
