@@ -24,10 +24,11 @@ CATEGORIES = [
     "Economy & Finance",
     "indian Crime & Law & Order",
     "indian Social Issues "
+    "india and it's international relations"
 ]
 
 def get_prompt(category):
-    return f"Give today's most controversy and latest news regarding '{category}', exactly in 260 characters, in Hinglish, only news ( no mention of word count or date , headline, source etc.) just news."
+    return f"Give today's most controversy and latest news regarding '{category}', exactly in 260 characters, in Hinglish, only news ( no mention of word count or date , headline, source etc.) just news, sound like a human."
 
 # ---------------- Twitter Setup ----------------  
 client = tweepy.Client(  
