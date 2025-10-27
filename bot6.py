@@ -25,6 +25,7 @@ CATEGORIES = [
     "indian Crime & Law & Order",
     "indian Social Issues "
     "india and it's international relations"
+    "Top twitter trading news " 
 ]
 
 def get_prompt(category):
