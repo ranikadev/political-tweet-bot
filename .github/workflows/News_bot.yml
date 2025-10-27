@@ -1,18 +1,18 @@
-name: Auto News Bot
+name: Auto News Bot 🤖🗞️
 
 on:
   schedule:
-    # 6 scheduled runs per day (IST): 9:00 AM, 12:15 PM, 4:00 PM, 6:00 PM, 7:30 PM, 8:30 PM
-    # Corresponding UTC: 03:30, 06:45, 10:30, 12:30, 14:00, 15:00
-    - cron: "30 3 * * *"
-    - cron: "45 6 * * *"
-    - cron: "30 10 * * *"
-    - cron: "30 12 * * *"
-    - cron: "0 14 * * *"
-    - cron: "0 15 * * *"
-    - cron: "10 16 * * *"
-    - cron: "20 17 * * *"
-    - cron: "25 18 * * *"
+    # Randomized human-like schedule (IST times with variable UTC windows)
+    # Each run happens in a 15–20 minute natural window
+    - cron: "15-45 3 * * *"   # 9:00 AM ±15m IST
+    - cron: "35-55 6 * * *"   # 12:15 PM ±10m IST
+    - cron: "20-40 10 * * *"  # 4:00 PM ±10m IST
+    - cron: "20-40 12 * * *"  # 6:00 PM ±10m IST
+    - cron: "50-59 13 * * *"  # 7:30 PM ±10m IST
+    - cron: "50-59 14 * * *"  # 8:30 PM ±10m IST
+    - cron: "0-20 16 * * *"   # 9:40 PM ±10m IST
+    - cron: "10-30 17 * * *"  # 10:50 PM ±10m IST
+    - cron: "15-35 18 * * *"  # 11:55 PM ±10m IST
   workflow_dispatch:
 
 jobs:
@@ -21,20 +21,20 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Checkout repo
+      - name: 🧾 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: 🐍 Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: 📦 Install dependencies
         run: |
           pip install --upgrade pip
           pip install requests tweepy
 
-      - name: Run bot
+      - name: 🧠 Run Auto News Bot
         env:
           PERPLEXITY_API: ${{ secrets.PERPLEXITY_API }}
           API_KEY: ${{ secrets.API_KEY }}
@@ -42,20 +42,33 @@ jobs:
           ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
           ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
         run: |
+          echo ""
+          echo "------------------------------------------------------------"
           echo "🕒 Current UTC: $(date -u)"
           echo "🕒 Current IST: $(TZ='Asia/Kolkata' date)"
+          echo "------------------------------------------------------------"
+          echo ""
 
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            echo "⏱ Scheduled run detected: applying random ±20 min delay..."
-            delay=$(( (RANDOM % 2400) - 1200 ))  # -1200 to +1200 seconds
-            if [ $delay -gt 0 ]; then
-              echo "⏳ Sleeping for $delay seconds (~$((delay/60)) min)..."
-              sleep $delay
-            else
-              echo "⚡ Negative offset ($delay s) — skipping wait."
-            fi
-          else
-            echo "🚀 Manual trigger — skipping delay."
+          # --- HUMAN-LIKE BEHAVIOUR SECTION ---
+          # Randomly skip 1–2 scheduled runs per day (simulate human behavior)
+          skip=$((RANDOM % 9))  # ~11% skip chance per run
+          if [ $skip -eq 0 ]; then
+            echo "😴 Feeling lazy today... skipping this run to look natural."
+            exit 0
           fi
 
+          # Random delay within ±20 min window for each run
+          delay=$(( (RANDOM % 2400) - 1200 ))  # -20 min to +20 min
+          if [ $delay -gt 0 ]; then
+            echo "☕ Waiting for $delay seconds (~$((delay/60)) min) before posting..."
+            sleep $delay
+          else
+            echo "⚡ Running slightly earlier today (offset: ${delay}s)..."
+          fi
+          # --- END HUMAN-LIKE SECTION ---
+
+          echo ""
+          echo "🚀 Launching Auto News Bot..."
           python -u bot6.py
+          echo "✅ News Bot finished successfully at $(TZ='Asia/Kolkata' date)"
+          echo "------------------------------------------------------------"
